@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compilador Simple</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .result {
+            margin-top: 20px;
+        }
+
+        .result p {
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Compilador Simple</h1>
+    <textarea id="code" placeholder="Ingresa tu código aquí..."></textarea>
+    <button onclick="analyzeCode()">Compilar</button>
+
+    <div class="result">
+        <h2>Resultados:</h2>
+        <p><strong>Análisis Léxico:</strong> <span id="lexical-result"></span></p>
+        <p><strong>Análisis Sintáctico:</strong> <span id="syntax-result" class="error"></span></p>
+        <p><strong>Análisis Semántico:</strong> <span id="semantic-result" class="error"></span></p>
+    </div>
+
+    <script src="./compiler.js"></script>
+</body>
+
+</html>
