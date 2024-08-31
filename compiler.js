@@ -1,8 +1,8 @@
 function lexicalAnalysis(code) {
     const tokenDefinitions = [
         { regex: /\b(let|const|var|if|else)\b/, type: 'palabra clave' },
-        { regex: /[a-zA-Z_]\w*/, type: 'identificador' },
-        { regex: /\d+/, type: 'número' },
+        { regex: /^[a-zA-Z_]\w*/, type: 'identificador' }, // Identificador que inicia con letras o _
+        { regex: /^\d+(\.\d+)?\b(?!\w)/, type: 'número' },  // Número que no es seguido por letras (no identificador)
         { regex: /=/, type: 'asignación' },
         { regex: /[+\-*/]/, type: 'operador' },
         { regex: /[;]/, type: 'punto y coma' },
@@ -43,61 +43,26 @@ function lexicalAnalysis(code) {
     return { tokens };
 }
 
+
 function syntaxAnalysis(tokens) {
     let i = 0;
 
     while (i < tokens.length) {
         const currentToken = tokens[i];
 
-        if (currentToken.type === 'palabra clave') {
-            if (currentToken.token === 'if') {
-                // Verifica que el siguiente token sea un paréntesis de apertura
-                if (tokens[i + 1]?.token !== '(') {
-                    return `Error sintáctico: Se esperaba '(' después de 'if' en la posición ${i + 1}`;
-                }
-
-                // Verifica que el siguiente token después del paréntesis sea un identificador o número
-                if (tokens[i + 2]?.type !== 'identificador' && tokens[i + 2]?.type !== 'número') {
-                    return `Error sintáctico: Se esperaba un identificador o número después de '(' en la posición ${i + 2}`;
-                }
-
-                // Verifica que el siguiente token sea una comparación
-                if (tokens[i + 3]?.token !== '=' && tokens[i + 4]?.type !== '=') {
-                    return `Error sintáctico: Se esperaba '==' en la posición ${i + 3} ${i + 4}`;
-                }
-
-                // Verifica que el siguiente token después de '==' sea un identificador o número
-                if (tokens[i + 5]?.type !== 'número') {
-                    return `Error sintáctico: Se esperaba un número después de '==' en la posición ${i + 5}`;
-                }
-
-                // Verifica que el siguiente token sea un paréntesis de cierre
-                if (tokens[i + 6]?.token !== ')') {
-                    return `Error sintáctico: Se esperaba ')' después de la condición en la posición ${i + 6}`;
-                }
-
-                // Verifica que el siguiente token sea una llave de apertura
-                if (tokens[i + 7]?.token !== '{') {
-                    return `Error sintáctico: Se esperaba '{' después de ')' en la posición ${i + 7}`;
-                }
-
-                // Verifica que la llave de cierre esté al final del bloque
-                if (!tokens.some((t, index) => index > i + 7 && t.token === '}')) {
-                    return `Error sintáctico: Se esperaba '}' para cerrar el bloque en la posición ${i + 7}`;
-                }
-
-                i += 7; // Avanza el índice para saltar la estructura completa del `if`
-                continue; // Continua con la siguiente iteración del bucle
+        // Verificar la estructura de las asignaciones
+        if (currentToken.type === 'identificador') {
+            if (tokens[i + 1]?.token !== '=') {
+                return `Error sintáctico: Se esperaba '=' después de '${currentToken.token}' en la posición ${i + 1}`;
             }
-        } else if (currentToken.token === '=' && tokens[i - 1]?.type !== 'identificador') {
-            return `Error sintáctico: Asignación inválida en la posición ${i}`;
-        } else if (currentToken.token === '==' || currentToken.token === '===' || currentToken.token === '>=' || currentToken.token === '<=') {
-            if (tokens[i - 1]?.type !== 'identificador' && tokens[i - 1]?.type !== 'número') {
-                return `Error sintáctico: Comparación inválida antes de '${currentToken.token}' en la posición ${i}`;
+
+            if (tokens[i + 2]?.type !== 'identificador' && tokens[i + 2]?.type !== 'número' && tokens[i + 2]?.type !== 'cadena de texto') {
+                return `Error sintáctico: Se esperaba un valor válido después de '=' en la posición ${i + 2}`;
             }
-            if (tokens[i + 1]?.type !== 'identificador' && tokens[i + 1]?.type !== 'número') {
-                return `Error sintáctico: Comparación inválida después de '${currentToken.token}' en la posición ${i}`;
-            }
+
+            // Saltar sobre la expresión de asignación válida
+            i += 3;
+            continue;
         }
         i++;
     }
@@ -105,34 +70,26 @@ function syntaxAnalysis(tokens) {
     return "El orden de los tokens es válido";
 }
 
-
-
 function semanticAnalysis(tokens) {
     let variables = {}; // Guardar el tipo de cada variable
     for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i].token === "let" || tokens[i].token === "const" || tokens[i].token === "var" || tokens[i].token === "int" || tokens[i].token === "char") {
+        if (tokens[i].token === "let" || tokens[i].token === "const" || tokens[i].token === "var") {
             let variableName = tokens[i + 1].token;
-            if (tokens[i].token === "char" && tokens[i + 2]?.token === "[") {
-                variables[variableName] = "array";
-            } else if (/^[0-9]+$/.test(tokens[i + 3]?.token)) {
-                variables[variableName] = "number";
-            } else {
-                variables[variableName] = tokens[i].token;
-            }
+            variables[variableName] = "variable";
         }
 
-        if (tokens[i].token === "=" || tokens[i].token === "+" || tokens[i].token === "-" || tokens[i].token === "*" || tokens[i].token === "/") {
-            let leftVar = variables[tokens[i - 1].token];
-            let rightVar = variables[tokens[i + 1].token];
+        if (tokens[i].token === "=") {
+            let leftVar = variables[tokens[i - 1]?.token];
+            let rightVar = tokens[i + 1]?.token;
 
-            // Si se detecta una operación con variables de tipos diferentes
-            if (leftVar && rightVar && leftVar !== rightVar) {
-                return `Error semántico: No se puede realizar la operación entre ${leftVar} y ${rightVar}`;
+            // Verificar si la variable fue declarada
+            if (!leftVar) {
+                return `Error semántico: Variable no declarada '${tokens[i - 1].token}'`;
             }
 
-            // Verifica si el tipo es incorrecto para la operación
-            if (leftVar === "array" || rightVar === "array") {
-                return `Error semántico: No se pueden realizar operaciones aritméticas con arreglos.`;
+            // Verifica si el valor a la derecha de la asignación es una variable no declarada
+            if (variables[rightVar] === undefined && tokens[i + 1].type === 'identificador') {
+                return `Error semántico: Variable no declarada '${rightVar}'`;
             }
         }
     }
