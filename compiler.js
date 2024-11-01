@@ -1,16 +1,17 @@
 function lexicalAnalysis(code) {
     const tokenDefinitions = [
-        { regex: /\b(let|const|var|if|else)\b/, type: 'palabra clave' },
+        { regex: /\b(let|const|var|if|else|while)\b/, type: 'palabra clave' },
         { regex: /^[a-zA-Z_]\w*/, type: 'identificador' }, // Identificador que inicia con letras o _
-        { regex: /^\d+(\.\d+)?\b(?!\w)/, type: 'número' },  // Número que no es seguido por letras (no identificador)
-        { regex: /=/, type: 'asignación' },
-        { regex: /[+\-*/]/, type: 'operador' },
-        { regex: /[;]/, type: 'punto y coma' },
-        { regex: /[,]/, type: 'coma' },
-        { regex: /[\[\]]/, type: 'corchete' },
-        { regex: /[\{\}]/, type: 'llave' },
-        { regex: /[()]/, type: 'paréntesis' },
-        { regex: /\"[^\"]*\"|\'[^\']*\'/, type: 'cadena de texto' }
+        { regex: /^\d+(\.\d+)?\b(?!\w)/, type: 'número' },  // Número
+        { regex: /^(==|===|>=|<=|>|<)/, type: 'operador de comparación' }, // Operadores de comparación
+        { regex: /^=/, type: 'asignación' },
+        { regex: /^[+\-*/]/, type: 'operador aritmético' },
+        { regex: /^[;]/, type: 'punto y coma' },
+        { regex: /^[,]/, type: 'coma' },
+        { regex: /^[\[\]]/, type: 'corchete' },
+        { regex: /^[\{\}]/, type: 'llave' },
+        { regex: /^[()]/, type: 'paréntesis' },
+        { regex: /^\"[^\"]*\"|\'[^\']*\'/, type: 'cadena de texto' }
     ];
 
     const tokens = [];
@@ -42,6 +43,7 @@ function lexicalAnalysis(code) {
     }
     return { tokens };
 }
+
 
 function syntaxAnalysis(tokens) {
     let i = 0;
