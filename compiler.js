@@ -1,8 +1,8 @@
 function lexicalAnalysis(code) {
     const tokenDefinitions = [
         { regex: /\b(let|const|var|if|else)\b/, type: 'palabra clave' },
-        { regex: /^-?\d+(\.\d+)?\b(?!\w)/, type: 'número' },  // Números, incluyendo negativos
-        { regex: /^[a-zA-Z_]\w*/, type: 'identificador' }, // Identificador
+        { regex: /^[a-zA-Z_]\w*/, type: 'identificador' }, // Identificador que inicia con letras o _
+        { regex: /^\d+(\.\d+)?\b(?!\w)/, type: 'número' },  // Número que no es seguido por letras (no identificador)
         { regex: /=/, type: 'asignación' },
         { regex: /[+\-*/]/, type: 'operador' },
         { regex: /[;]/, type: 'punto y coma' },
@@ -14,7 +14,6 @@ function lexicalAnalysis(code) {
     ];
 
     const tokens = [];
-    const errors = [];
     let position = 0;
 
     while (position < code.length) {
@@ -37,81 +36,144 @@ function lexicalAnalysis(code) {
         }
 
         if (!matchFound) {
-            errors.push(`Error léxico: Token no reconocido "${code[position]}" en la posición ${position}`);
-            position++; // Avanza a la siguiente posición para continuar
+            const unrecognizedToken = code[position];
+            return { error: `Error léxico: Token no reconocido "${unrecognizedToken}" en la posición ${position}` };
         }
     }
-
-    return errors.length > 0 ? { errors } : { tokens };
+    return { tokens };
 }
-
 
 function syntaxAnalysis(tokens) {
     let i = 0;
-    let braceCounter = 0;
 
     while (i < tokens.length) {
         const currentToken = tokens[i];
 
-        // Verificación de estructura en declaraciones de variables
-        if (currentToken.token === 'let' || currentToken.token === 'const' || currentToken.token === 'var') {
-            if (tokens[i + 1]?.type !== 'identificador') {
-                return `Error sintáctico: Se esperaba un identificador después de '${currentToken.token}' en la posición ${i + 1}`;
+        if (currentToken.type === 'palabra clave') {
+            if (currentToken.token === 'if') {
+                // Verifica que el siguiente token sea un paréntesis de apertura
+                if (tokens[i + 1]?.token !== '(') {
+                    return `Error sintáctico: Se esperaba '(' después de 'if' en la posición ${i + 1}`;
+                }
+
+                // Verifica que el siguiente token después del paréntesis sea un identificador o número
+                if (tokens[i + 2]?.type !== 'identificador' && tokens[i + 2]?.type !== 'número') {
+                    return `Error sintáctico: Se esperaba un identificador o número después de '(' en la posición ${i + 2}`;
+                }
+
+                // Verifica que el siguiente token sea una comparación
+                if (tokens[i + 3]?.token !== '=' && tokens[i + 4]?.type !== '=') {
+                    return `Error sintáctico: Se esperaba '==' en la posición ${i + 3} ${i + 4}`;
+                }
+
+                // Verifica que el siguiente token después de '==' sea un identificador o número
+                if (tokens[i + 5]?.type !== 'número') {
+                    return `Error sintáctico: Se esperaba un número después de '==' en la posición ${i + 5}`;
+                }
+
+                // Verifica que el siguiente token sea un paréntesis de cierre
+                if (tokens[i + 6]?.token !== ')') {
+                    return `Error sintáctico: Se esperaba ')' después de la condición en la posición ${i + 6}`;
+                }
+
+                // Verifica que el siguiente token sea una llave de apertura
+                if (tokens[i + 7]?.token !== '{') {
+                    return `Error sintáctico: Se esperaba '{' después de ')' en la posición ${i + 7}`;
+                }
+
+                // Verifica que la llave de cierre esté al final del bloque
+                if (!tokens.some((t, index) => index > i + 7 && t.token === '}')) {
+                    return `Error sintáctico: Se esperaba '}' para cerrar el bloque en la posición ${i + 7}`;
+                }
+
+                i += 7; // Avanza el índice para saltar la estructura completa del `if`
+                continue; // Continua con la siguiente iteración del bucle
             }
-            if (tokens[i + 2]?.token !== '=') {
-                return `Error sintáctico: Se esperaba '=' después de '${tokens[i + 1]?.token}' en la posición ${i + 2}`;
+        } else if (currentToken.token === '=' && tokens[i - 1]?.type !== 'identificador') {
+            return `Error sintáctico: Asignación inválida en la posición ${i}`;
+        } else if (currentToken.token === '==' || currentToken.token === '===' || currentToken.token === '>=' || currentToken.token === '<=') {
+            if (tokens[i - 1]?.type !== 'identificador' && tokens[i - 1]?.type !== 'número') {
+                return `Error sintáctico: Comparación inválida antes de '${currentToken.token}' en la posición ${i}`;
+            }
+            if (tokens[i + 1]?.type !== 'identificador' && tokens[i + 1]?.type !== 'número') {
+                return `Error sintáctico: Comparación inválida después de '${currentToken.token}' en la posición ${i}`;
             }
         }
-
-        // Identificador aislado sin una declaración o asignación
-        if (currentToken.type === 'identificador' && !['let', 'const', 'var', '='].includes(tokens[i - 1]?.token)) {
-            return `Error sintáctico: Declaración incompleta o aislada del identificador '${currentToken.token}' en la posición ${i}`;
-        }
-
-        if (currentToken.token === '{') braceCounter++;
-        if (currentToken.token === '}') braceCounter--;
-
-        if (braceCounter < 0) return `Error sintáctico: Llave de cierre inesperada en la posición ${i}`;
         i++;
     }
 
-    if (braceCounter !== 0) return `Error sintáctico: Llave de cierre faltante`;
     return "El orden de los tokens es válido";
 }
 
-
-
-
 function semanticAnalysis(tokens) {
-    const variables = {};
+    const variables = {}; // Almacena el estado de las variables: {nombre: {declarada: true, inicializada: true/false}}
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
 
+        // Manejar declaraciones de variables (`let`, `const`, `var`)
         if (['let', 'const', 'var'].includes(token.token)) {
-            const variableName = tokens[i + 1]?.token;
-            const variableType = token.token;
+            let j = i + 1;
+            let isMultipleDeclaration = false;
 
-            if (variables[variableName]) {
-                return `Error semántico: Variable "${variableName}" ya declarada en la posición ${i}`;
+            // Revisar hasta el final de la declaración (`;`)
+            while (tokens[j] && tokens[j].token !== ';') {
+                if (tokens[j].type === 'identificador') {
+                    // Si la variable ya está declarada, lanzar error de doble declaración
+                    if (variables.hasOwnProperty(tokens[j].token)) {
+                        return `Error semántico: Variable "${tokens[j].token}" ya declarada en la posición ${j}`;
+                    }
+                    // Registrar la variable como declarada, pero aún no inicializada
+                    variables[tokens[j].token] = { declarada: true, inicializada: false };
+                    
+                    // Comprobar si es una declaración múltiple
+                    if (tokens[j + 1]?.token === ',') {
+                        isMultipleDeclaration = true;
+                    }
+                }
+                j++;
             }
-            variables[variableName] = variableType;
+
+            // Validar si se detecta una declaración de variables múltiple o única
+            if (isMultipleDeclaration) {
+                console.log("Declaración múltiple de variables detectada.");
+            } else {
+                console.log("Declaración única de variable detectada.");
+            }
+
+            i = j; // Salta el índice después de `;`
         }
 
+        // Verificar asignaciones para inicializar variables
         if (token.token === '=') {
             const leftVar = tokens[i - 1]?.token;
-            const rightVarType = variables[tokens[i + 1]?.token];
 
-            if (variables[leftVar] && rightVarType && variables[leftVar] !== rightVarType) {
-                return `Error semántico: No se puede reasignar el tipo de "${leftVar}" a ${rightVarType}`;
+            // Error si intenta inicializar una variable no declarada
+            if (!variables[leftVar]?.declarada) {
+                return `Error semántico: Variable "${leftVar}" no declarada en la posición ${i - 1}`;
+            }
+
+            // Marcar la variable como inicializada
+            variables[leftVar].inicializada = true;
+
+            // Verificar el lado derecho de la asignación si es un identificador
+            const rightVar = tokens[i + 1]?.token;
+            if (tokens[i + 1]?.type === 'identificador' && !variables[rightVar]?.declarada) {
+                return `Error semántico: Variable "${rightVar}" no declarada en la posición ${i + 1}`;
             }
         }
 
+        // Verificar el uso de variables en operaciones aritméticas
         if (['+', '-', '*', '/'].includes(token.token)) {
-            const leftType = variables[tokens[i - 1]?.token];
-            const rightType = variables[tokens[i + 1]?.token];
-            if (leftType === 'array' || rightType === 'array') {
-                return `Error semántico: No se pueden realizar operaciones aritméticas con arreglos.`;
+            const leftVar = tokens[i - 1]?.token;
+            const rightVar = tokens[i + 1]?.token;
+
+            // Error si intenta usar una variable no declarada o no inicializada
+            if (tokens[i - 1]?.type === 'identificador' && (!variables[leftVar]?.declarada || !variables[leftVar].inicializada)) {
+                return `Error semántico: Variable "${leftVar}" no inicializada en la posición ${i - 1}`;
+            }
+            if (tokens[i + 1]?.type === 'identificador' && (!variables[rightVar]?.declarada || !variables[rightVar].inicializada)) {
+                return `Error semántico: Variable "${rightVar}" no inicializada en la posición ${i + 1}`;
             }
         }
     }
@@ -123,7 +185,7 @@ function analyzeCode() {
     const code = document.getElementById("code").value;
     const lexicalResult = lexicalAnalysis(code);
 
-    if (lexicalResult.errors) {
+    if (lexicalResult.error) {
         showLexicalResult(lexicalResult);
         clearSyntaxAndSemanticResults();
         return;
@@ -155,16 +217,15 @@ function clearSemanticResults() {
 
 function showLexicalResult(result) {
     const resultElement = document.getElementById("lexical-result");
-    if (result.errors) {
-        resultElement.innerHTML = result.errors.map(error => `<span class="error">❌ ${error}</span>`).join('<br>');
+    if (result.error) {
+        resultElement.innerHTML = `<span class="error">❌ ${result.error}</span>`;
     } else {
         resultElement.innerHTML = `<span class="success">✔️ Análisis Léxico completado sin errores.</span><br>`;
-        result.tokens.forEach(token => {
+        result.tokens.forEach(function (token) {
             resultElement.innerHTML += `${token.type}: ${token.token} <br>`;
         });
     }
 }
-
 
 function showSyntaxResult(result) {
     const resultElement = document.getElementById("syntax-result");
