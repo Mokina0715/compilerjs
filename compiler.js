@@ -49,49 +49,87 @@ function syntaxAnalysis(tokens) {
     while (i < tokens.length) {
         const currentToken = tokens[i];
 
-        if (currentToken.type === 'palabra clave') {
-            if (currentToken.token === 'if') {
-                // Verifica que el siguiente token sea un paréntesis de apertura
-                if (tokens[i + 1]?.token !== '(') {
-                    return `Error sintáctico: Se esperaba '(' después de 'if' en la posición ${i + 1}`;
-                }
-
-                // Verifica que el siguiente token después del paréntesis sea un identificador o número
-                if (tokens[i + 2]?.type !== 'identificador' && tokens[i + 2]?.type !== 'número') {
-                    return `Error sintáctico: Se esperaba un identificador o número después de '(' en la posición ${i + 2}`;
-                }
-
-                // Verifica que el siguiente token sea una comparación
-                if (tokens[i + 3]?.token !== '=' && tokens[i + 4]?.type !== '=') {
-                    return `Error sintáctico: Se esperaba '==' en la posición ${i + 3} ${i + 4}`;
-                }
-
-                // Verifica que el siguiente token después de '==' sea un identificador o número
-                if (tokens[i + 5]?.type !== 'número') {
-                    return `Error sintáctico: Se esperaba un número después de '==' en la posición ${i + 5}`;
-                }
-
-                // Verifica que el siguiente token sea un paréntesis de cierre
-                if (tokens[i + 6]?.token !== ')') {
-                    return `Error sintáctico: Se esperaba ')' después de la condición en la posición ${i + 6}`;
-                }
-
-                // Verifica que el siguiente token sea una llave de apertura
-                if (tokens[i + 7]?.token !== '{') {
-                    return `Error sintáctico: Se esperaba '{' después de ')' en la posición ${i + 7}`;
-                }
-
-                // Verifica que la llave de cierre esté al final del bloque
-                if (!tokens.some((t, index) => index > i + 7 && t.token === '}')) {
-                    return `Error sintáctico: Se esperaba '}' para cerrar el bloque en la posición ${i + 7}`;
-                }
-
-                i += 7; // Avanza el índice para saltar la estructura completa del `if`
-                continue; // Continua con la siguiente iteración del bucle
+        // Verificación para palabras clave `if`, `while`
+        if (currentToken.type === 'palabra clave' && ['if', 'while'].includes(currentToken.token)) {
+            // Verificación específica para estructura de control de flujo
+            if (tokens[i + 1]?.token !== '(') {
+                return `Error sintáctico: Se esperaba '(' después de '${currentToken.token}' en la posición ${i + 1}`;
             }
-        } else if (currentToken.token === '=' && tokens[i - 1]?.type !== 'identificador') {
+            if (tokens[i + 2]?.type !== 'identificador' && tokens[i + 2]?.type !== 'número') {
+                return `Error sintáctico: Se esperaba un identificador o número después de '(' en la posición ${i + 2}`;
+            }
+            if (!['==', '===', '>=', '<=', '>', '<'].includes(tokens[i + 3]?.token)) {
+                return `Error sintáctico: Se esperaba un operador de comparación en la posición ${i + 3}`;
+            }
+            if (tokens[i + 4]?.type !== 'identificador' && tokens[i + 4]?.type !== 'número') {
+                return `Error sintáctico: Se esperaba un identificador o número después de la comparación en la posición ${i + 4}`;
+            }
+            if (tokens[i + 5]?.token !== ')') {
+                return `Error sintáctico: Se esperaba ')' después de la condición en la posición ${i + 5}`;
+            }
+            if (tokens[i + 6]?.token !== '{') {
+                return `Error sintáctico: Se esperaba '{' después de ')' en la posición ${i + 6}`;
+            }
+            const closingBraceIndex = tokens.findIndex((t, idx) => idx > i + 6 && t.token === '}');
+            if (closingBraceIndex === -1) {
+                return `Error sintáctico: Se esperaba '}' para cerrar el bloque en la posición ${i + 6}`;
+            }
+            i = closingBraceIndex;
+            continue;
+        }
+
+        // Verificación para declaraciones de variables (`let`, `const`, `var`)
+        if (['let', 'const', 'var'].includes(currentToken.token)) {
+            let j = i + 1;
+
+            // Procesar una lista de variables declaradas (múltiples o únicas)
+            let expectingCommaOrEnd = false; // Bandera para verificar el final de una declaración múltiple
+            while (tokens[j] && tokens[j].token !== ';') {
+                if (tokens[j].type === 'identificador') {
+                    // Si se espera `,` o `;` y encontramos un identificador, hay un error
+                    if (expectingCommaOrEnd) {
+                        return `Error sintáctico: Se esperaba ',' o ';' en la posición ${j}`;
+                    }
+                    expectingCommaOrEnd = true; // Después de un identificador, esperar `,` o `=`
+                } else if (tokens[j].token === ',') {
+                    // Si encontramos `,`, se espera otro identificador
+                    if (!expectingCommaOrEnd) {
+                        return `Error sintáctico: Se esperaba un identificador antes de ',' en la posición ${j}`;
+                    }
+                    expectingCommaOrEnd = false;
+                } else if (tokens[j].token === '=') {
+                    // Si encontramos `=`, verificar inicialización de una única variable
+                    if (!expectingCommaOrEnd || tokens[j - 1].type !== 'identificador') {
+                        return `Error sintáctico: Asignación inválida en la posición ${j}`;
+                    }
+                    // Verificar que después de `=` haya un número o identificador
+                    if (tokens[j + 1]?.type !== 'número' && tokens[j + 1]?.type !== 'identificador') {
+                        return `Error sintáctico: Se esperaba un valor después de '=' en la posición ${j + 1}`;
+                    }
+                    j++; // Salta el valor después de `=`
+                    expectingCommaOrEnd = true;
+                } else {
+                    return `Error sintáctico: Token inesperado '${tokens[j].token}' en la posición ${j}`;
+                }
+                j++;
+            }
+
+            // Si se espera `;` al final de una declaración y no está presente
+            if (expectingCommaOrEnd && tokens[j]?.token !== ';') {
+                return `Error sintáctico: Se esperaba ';' al final de la declaración en la posición ${j}`;
+            }
+
+            i = j; // Avanza el índice hasta el `;`
+            continue;
+        }
+
+        // Validación de asignaciones (`x = 5;`)
+        if (currentToken.token === '=' && tokens[i - 1]?.type !== 'identificador') {
             return `Error sintáctico: Asignación inválida en la posición ${i}`;
-        } else if (currentToken.token === '==' || currentToken.token === '===' || currentToken.token === '>=' || currentToken.token === '<=') {
+        }
+
+        // Validación para operadores de comparación (`==`, `===`, `>=`, `<=`)
+        if (['==', '===', '>=', '<=', '>', '<'].includes(currentToken.token)) {
             if (tokens[i - 1]?.type !== 'identificador' && tokens[i - 1]?.type !== 'número') {
                 return `Error sintáctico: Comparación inválida antes de '${currentToken.token}' en la posición ${i}`;
             }
@@ -99,87 +137,55 @@ function syntaxAnalysis(tokens) {
                 return `Error sintáctico: Comparación inválida después de '${currentToken.token}' en la posición ${i}`;
             }
         }
+
+        // Validación para operadores aritméticos (`+`, `-`, `*`, `/`)
+        if (['+', '-', '*', '/'].includes(currentToken.token)) {
+            if (tokens[i - 1]?.type !== 'identificador' && tokens[i - 1]?.type !== 'número') {
+                return `Error sintáctico: Operando inválido antes de '${currentToken.token}' en la posición ${i}`;
+            }
+            if (tokens[i + 1]?.type !== 'identificador' && tokens[i + 1]?.type !== 'número') {
+                return `Error sintáctico: Operando inválido después de '${currentToken.token}' en la posición ${i}`;
+            }
+        }
+
         i++;
     }
 
     return "El orden de los tokens es válido";
 }
 
+
 function semanticAnalysis(tokens) {
-    const variables = {}; // Almacena el estado de las variables: {nombre: {declarada: true, inicializada: true/false}}
-
+    let variables = {}; // Guardar el tipo de cada variable
     for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-
-        // Manejar declaraciones de variables (`let`, `const`, `var`)
-        if (['let', 'const', 'var'].includes(token.token)) {
-            let j = i + 1;
-            let isMultipleDeclaration = false;
-
-            // Revisar hasta el final de la declaración (`;`)
-            while (tokens[j] && tokens[j].token !== ';') {
-                if (tokens[j].type === 'identificador') {
-                    // Si la variable ya está declarada, lanzar error de doble declaración
-                    if (variables.hasOwnProperty(tokens[j].token)) {
-                        return `Error semántico: Variable "${tokens[j].token}" ya declarada en la posición ${j}`;
-                    }
-                    // Registrar la variable como declarada, pero aún no inicializada
-                    variables[tokens[j].token] = { declarada: true, inicializada: false };
-                    
-                    // Comprobar si es una declaración múltiple
-                    if (tokens[j + 1]?.token === ',') {
-                        isMultipleDeclaration = true;
-                    }
-                }
-                j++;
-            }
-
-            // Validar si se detecta una declaración de variables múltiple o única
-            if (isMultipleDeclaration) {
-                console.log("Declaración múltiple de variables detectada.");
+        if (tokens[i].token === "let" || tokens[i].token === "const" || tokens[i].token === "var" || tokens[i].token === "int" || tokens[i].token === "char") {
+            let variableName = tokens[i + 1].token;
+            if (tokens[i].token === "char" && tokens[i + 2]?.token === "[") {
+                variables[variableName] = "array";
+            } else if (/^[0-9]+$/.test(tokens[i + 3]?.token)) {
+                variables[variableName] = "number";
             } else {
-                console.log("Declaración única de variable detectada.");
-            }
-
-            i = j; // Salta el índice después de `;`
-        }
-
-        // Verificar asignaciones para inicializar variables
-        if (token.token === '=') {
-            const leftVar = tokens[i - 1]?.token;
-
-            // Error si intenta inicializar una variable no declarada
-            if (!variables[leftVar]?.declarada) {
-                return `Error semántico: Variable "${leftVar}" no declarada en la posición ${i - 1}`;
-            }
-
-            // Marcar la variable como inicializada
-            variables[leftVar].inicializada = true;
-
-            // Verificar el lado derecho de la asignación si es un identificador
-            const rightVar = tokens[i + 1]?.token;
-            if (tokens[i + 1]?.type === 'identificador' && !variables[rightVar]?.declarada) {
-                return `Error semántico: Variable "${rightVar}" no declarada en la posición ${i + 1}`;
+                variables[variableName] = tokens[i].token;
             }
         }
 
-        // Verificar el uso de variables en operaciones aritméticas
-        if (['+', '-', '*', '/'].includes(token.token)) {
-            const leftVar = tokens[i - 1]?.token;
-            const rightVar = tokens[i + 1]?.token;
+        if (tokens[i].token === "=" || tokens[i].token === "+" || tokens[i].token === "-" || tokens[i].token === "*" || tokens[i].token === "/") {
+            let leftVar = variables[tokens[i - 1].token];
+            let rightVar = variables[tokens[i + 1].token];
 
-            // Error si intenta usar una variable no declarada o no inicializada
-            if (tokens[i - 1]?.type === 'identificador' && (!variables[leftVar]?.declarada || !variables[leftVar].inicializada)) {
-                return `Error semántico: Variable "${leftVar}" no inicializada en la posición ${i - 1}`;
+            // Si se detecta una operación con variables de tipos diferentes
+            if (leftVar && rightVar && leftVar !== rightVar) {
+                return `Error semántico: No se puede realizar la operación entre ${leftVar} y ${rightVar}`;
             }
-            if (tokens[i + 1]?.type === 'identificador' && (!variables[rightVar]?.declarada || !variables[rightVar].inicializada)) {
-                return `Error semántico: Variable "${rightVar}" no inicializada en la posición ${i + 1}`;
+
+            // Verifica si el tipo es incorrecto para la operación
+            if (leftVar === "array" || rightVar === "array") {
+                return `Error semántico: No se pueden realizar operaciones aritméticas con arreglos.`;
             }
         }
     }
     return "Todos los tipos de variables son correctos";
 }
-
 
 function analyzeCode() {
     const code = document.getElementById("code").value;
