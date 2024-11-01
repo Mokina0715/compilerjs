@@ -142,28 +142,61 @@ function analyzeCode() {
     const lexicalResult = lexicalAnalysis(code);
 
     if (lexicalResult.error) {
-        document.getElementById("lexical-result").textContent = lexicalResult.error;
-        document.getElementById("syntax-result").textContent = "";
-        document.getElementById("semantic-result").textContent = "";
+        showLexicalResult(lexicalResult);
+        clearSyntaxAndSemanticResults();
         return;
     }
 
-    const tokens = lexicalResult.tokens;
-    let tokens_text = '<br>';
-    tokens.forEach(function (token) {
-        tokens_text += `${token.type}: ${token.token} <br>`;
-    });
+    showLexicalResult(lexicalResult);
 
-    document.getElementById("lexical-result").innerHTML = tokens_text;
-
-    const syntaxResult = syntaxAnalysis(tokens);
+    const syntaxResult = syntaxAnalysis(lexicalResult.tokens);
     if (syntaxResult.startsWith("Error")) {
-        document.getElementById("syntax-result").textContent = syntaxResult;
-        document.getElementById("semantic-result").textContent = "";
+        showSyntaxResult(syntaxResult);
+        clearSemanticResults();
         return;
     }
-    document.getElementById("syntax-result").textContent = syntaxResult;
 
-    const semanticResult = semanticAnalysis(tokens);
-    document.getElementById("semantic-result").textContent = semanticResult;
+    showSyntaxResult(syntaxResult);
+
+    const semanticResult = semanticAnalysis(lexicalResult.tokens);
+    showSemanticResult(semanticResult);
+}
+
+function clearSyntaxAndSemanticResults() {
+    document.getElementById("syntax-result").textContent = "";
+    document.getElementById("semantic-result").textContent = "";
+}
+
+function clearSemanticResults() {
+    document.getElementById("semantic-result").textContent = "";
+}
+
+function showLexicalResult(result) {
+    const resultElement = document.getElementById("lexical-result");
+    if (result.error) {
+        resultElement.innerHTML = `<span class="error">❌ ${result.error}</span>`;
+    } else {
+        resultElement.innerHTML = `<span class="success">✔️ Análisis Léxico completado sin errores.</span><br>`;
+        result.tokens.forEach(function (token) {
+            resultElement.innerHTML += `${token.type}: ${token.token} <br>`;
+        });
+    }
+}
+
+function showSyntaxResult(result) {
+    const resultElement = document.getElementById("syntax-result");
+    if (result.startsWith("Error")) {
+        resultElement.innerHTML = `<span class="error">❌ ${result}</span>`;
+    } else {
+        resultElement.innerHTML = `<span class="success">✔️ ${result}</span>`;
+    }
+}
+
+function showSemanticResult(result) {
+    const resultElement = document.getElementById("semantic-result");
+    if (result.startsWith("Error")) {
+        resultElement.innerHTML = `<span class="error">❌ ${result}</span>`;
+    } else {
+        resultElement.innerHTML = `<span class="success">✔️ ${result}</span>`;
+    }
 }
